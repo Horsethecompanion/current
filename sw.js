@@ -4,7 +4,7 @@
 // edge cache, and this service worker just leaves cross-origin requests
 // (the worker, the WITS API) alone entirely.
 
-const CACHE_NAME = "current-shell-v1";
+const CACHE_NAME = "current-shell-v2";
 
 const SHELL_FILES = [
     "./",
@@ -55,32 +55,31 @@ self.addEventListener("fetch", (event) => {
     if (event.request.method !== "GET" || url.origin !== self.location.origin)
         return;
 
+    // Network-first: always prefer a fresh copy when there's a
+    // connection, so code changes show up on the very next reload
+    // rather than waiting on a manual cache clear. The cache only
+    // kicks in if the network request genuinely fails (offline, wifi
+    // blip) — that's the one thing it's actually there for.
+
     event.respondWith(
-        caches.match(event.request).then(cached => {
 
-            const network = fetch(event.request)
-                .then(response => {
+        fetch(event.request)
+            .then(response => {
 
-                    if (response.ok) {
+                if (response.ok) {
 
-                        const copy = response.clone();
+                    const copy = response.clone();
 
-                        caches.open(CACHE_NAME)
-                            .then(cache => cache.put(event.request, copy));
+                    caches.open(CACHE_NAME)
+                        .then(cache => cache.put(event.request, copy));
 
-                    }
+                }
 
-                    return response;
+                return response;
 
-                })
-                .catch(() => cached);
+            })
+            .catch(() => caches.match(event.request))
 
-            // Cache-first for instant paint, but keep the cache fresh
-            // in the background whenever the network is available.
-
-            return cached || network;
-
-        })
     );
 
 });
