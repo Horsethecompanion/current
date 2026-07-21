@@ -63,7 +63,7 @@ const CONFIG = {
 
     useMockData: false,
 
-    workerUrl: "https://current-prices.YOUR-SUBDOMAIN.workers.dev",
+    workerUrl: "https://current-prices.current-prices.workers.dev",
 
     gxpNode: "ALB0331", // Albany GXP — North Shore
 
