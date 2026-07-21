@@ -20,9 +20,9 @@ Your node for North Shore / Albany is **ALB0331** — already the default.
 
 Schedule names are confirmed and already set in `worker.js`: `RTD`
 (actual settled dispatch prices, for history) and `PRSL` (forward price
-schedule, for the forecast side). Token URL, GraphQL endpoint, and field
-names are all confirmed from WITS's own "Kong Developer Portal User
-Guide" plus a live `/schedules` response.
+schedule, for the forecast side). Token URL and the REST `/prices`
+endpoint are both confirmed from real, authenticated responses in the
+portal's "Try it out" console.
 
 ## 2. Install Wrangler (Cloudflare's CLI)
 

@@ -3,41 +3,53 @@
  *
  * Sits between the "Current" web app and the WITS (electricityinfo.co.nz)
  * Market Prices API. Holds the OAuth client credentials (never exposed to
- * the browser), queries current + forecast prices for a GXP node via
- * GraphQL, and caches the result for ~60s so repeated polling doesn't
- * hammer the upstream API or the token endpoint.
+ * the browser), queries current + forecast prices for a GXP node, and
+ * caches the result for ~60s so repeated polling doesn't hammer the
+ * upstream API or the token endpoint.
  *
  * ============================================================
- * CONFIRMED — from a real, authenticated GET /schedules response
+ * CONFIRMED — from real, authenticated API responses
  * ============================================================
- * Every schedule has a FIXED runType — it's not a per-row draft/final
- * flag the way an earlier version of this file assumed. The relevant
- * ones for this app:
+ * - Token URL:  https://api.electricityinfo.co.nz/login/oauth2/token
+ * - Grant type: client_credentials
+ * - Prices endpoint: GET https://api.electricityinfo.co.nz/api/market-prices/v1/prices
+ *   (REST — the GraphQL path documented elsewhere isn't actually wired up
+ *   on this gateway; it 404s. This REST endpoint is confirmed live via
+ *   the portal's own "Try it out" console.)
+ * - Query params: schedules (array, required), marketType (required),
+ *   nodes (array, optional), back/forward (trading-period offsets from
+ *   now, optional, max ~50 each).
+ * - Response shape: { schedules: [ { schedule, prices: [ { schedule,
+ *   tradingDateTime, tradingPeriod, runType, node, price, ... } ] } ] }
+ * - tradingDateTime arrives with an explicit offset, e.g.
+ *   "2021-06-16T10:30:00+12:00" — no NZ-local guessing needed, though
+ *   parseTradingDateTime() below still handles a naive/offset-less
+ *   string correctly as a safety net.
+ *
+ * Every schedule has a FIXED runType (confirmed via GET /schedules) —
+ * it's not a per-row draft/final flag:
  *
  *   RTD  → runType "D"  — real dispatch, actual settled 5-min prices.
  *          This is "what actually happened" — used for history.
  *   PRSL → runType "G"  — forward price schedule (forecast), the
  *          longer-range one. Used for the forecast side of the timeline.
  *
- * (There's no "RTP" schedule at all in this account's real schedule
- * list — that name came from the docs' generic example query and
- * doesn't exist here. An earlier version of this worker was pointed at
- * it by mistake.)
- *
- * Also confirmed, from the official Kong Developer Portal User Guide:
- * - Token URL:  https://api.electricityinfo.co.nz/login/oauth2/token
- * - Grant type: client_credentials
- * - GraphQL endpoint: https://api.electricityinfo.co.nz/api/market-prices/v1/graphql
+ * (There's no "RTP" schedule in this account's real schedule list —
+ * that name only ever appeared in the docs' generic example, both for
+ * the GraphQL example query and this REST endpoint's example response.)
  * ============================================================
  */
 
 const TOKEN_URL = "https://api.electricityinfo.co.nz/login/oauth2/token";
-const GRAPHQL_URL = "https://api.electricityinfo.co.nz/api/market-prices/v1/graphql";
+const PRICES_URL = "https://api.electricityinfo.co.nz/api/market-prices/v1/prices";
 
 const MARKET_TYPE = "E"; // Energy (as opposed to Reserves)
 
 const ACTUAL_SCHEDULE = "RTD";     // runType "D" — real settled dispatch prices
 const FORECAST_SCHEDULE = "PRSL";  // runType "G" — forward price schedule
+
+const HISTORY_PERIODS = 48;   // 24h back, in 30-min trading periods
+const FORECAST_PERIODS = 48;  // 24h forward, in 30-min trading periods
 
 // In-memory token cache — persists for the lifetime of the Worker isolate,
 // which is usually long enough to avoid re-authenticating on every request.
@@ -80,6 +92,7 @@ export default {
 
             const raw = await fetchPrices(
                 [ACTUAL_SCHEDULE, FORECAST_SCHEDULE],
+                node,
                 token
             );
 
@@ -144,52 +157,32 @@ async function getAccessToken(env) {
 
 }
 
-// Documented example query, extended with `node` and `runType` — the docs
-// only showed `schedules` + `marketType` as arguments, so `node` here is
-// an assumption. If the live query errors on an unknown `node` argument,
-// drop it from the query below and rely on the client-side filter in
-// toTimeSeries() instead (which happens regardless, as a safety net).
+async function fetchPrices(schedules, node, token) {
 
-async function fetchPrices(schedules, token) {
+    const params = new URLSearchParams();
 
-    const query = `
-        {
-            prices(
-                schedules: ${JSON.stringify(schedules)}
-                marketType: ${MARKET_TYPE}
-            ) {
-                schedule
-                runType
-                tradingDateTime
-                tradingPeriod
-                marketType
-                island
-                node
-                price
-            }
-        }
-    `;
+    schedules.forEach(s => params.append("schedules", s));
+    params.append("marketType", MARKET_TYPE);
+    params.append("nodes", node);
+    params.append("back", String(HISTORY_PERIODS));
+    params.append("forward", String(FORECAST_PERIODS));
 
-    const res = await fetch(GRAPHQL_URL, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ query })
+    const res = await fetch(`${PRICES_URL}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
     });
 
     if (!res.ok) {
-        throw new Error(`GraphQL request failed: ${res.status} ${await res.text()}`);
+        throw new Error(`Prices request failed: ${res.status} ${await res.text()}`);
     }
 
     const body = await res.json();
 
-    if (body.errors?.length) {
-        throw new Error(`GraphQL errors: ${JSON.stringify(body.errors)}`);
-    }
+    // Confirmed live: the response is a plain top-level array of schedule
+    // groups — [ { schedule, prices: [...] }, ... ] — not wrapped in a
+    // { "schedules": [...] } object the way the docs' example showed.
+    const groups = Array.isArray(body) ? body : (body?.schedules || []);
 
-    return body?.data?.prices || [];
+    return groups.flatMap(group => group.prices || []);
 
 }
 

@@ -61,7 +61,7 @@ const CONFIG = {
     // Data source
     // Flip to false once the worker is deployed and workerUrl is set below.
 
-    useMockData: true,
+    useMockData: false,
 
     workerUrl: "https://current-prices.YOUR-SUBDOMAIN.workers.dev",
 
