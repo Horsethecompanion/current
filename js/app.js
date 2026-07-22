@@ -15,14 +15,14 @@ let lastFrame = performance.now();
 
 function withMargin(data) {
 
-    const margin = getRetailMargin();
+    const settings = getMarginSettings();
 
-    if (margin === 0)
+    if (settings.value === 0)
         return data;
 
     return data.map(d => ({
         time: d.time,
-        price: Number((d.price + margin).toFixed(2))
+        price: applyMargin(d.price, settings)
     }));
 
 }
@@ -228,6 +228,7 @@ const settingsOverlay = document.getElementById("settingsOverlay");
 const knownNodesEl = document.getElementById("knownNodes");
 const customNodeInput = document.getElementById("customNode");
 const marginInputEl = document.getElementById("marginInput");
+const marginUnitEl = document.getElementById("marginUnit");
 
 let pressTimer = null;
 let suppressNextClick = false;
@@ -282,7 +283,10 @@ function openSettings() {
 
     renderKnownNodes();
 
-    marginInputEl.value = getRetailMargin();
+    const settings = getMarginSettings();
+
+    marginInputEl.value = settings.value;
+    setMarginModeUI(settings.mode);
 
     settingsOverlay.classList.remove("hidden");
 
@@ -388,7 +392,56 @@ document.getElementById("applyCustomNode").addEventListener("click", () => {
 document.getElementById("applyMargin").addEventListener("click", () => {
 
     const value = Number(marginInputEl.value);
+    const mode = document.querySelector('input[name="marginMode"]:checked')?.value || "flat";
 
-    setRetailMargin(Number.isFinite(value) ? value : 0);
+    setMarginSettings(Number.isFinite(value) ? value : 0, mode);
 
 });
+
+function setMarginModeUI(mode) {
+
+    const radio = document.querySelector(`input[name="marginMode"][value="${mode}"]`);
+
+    if (radio)
+        radio.checked = true;
+
+    updateMarginUnitLabel(mode);
+
+}
+
+function updateMarginUnitLabel(mode) {
+
+    marginUnitEl.textContent = mode === "percent" ? "%" : "c/kWh";
+    marginInputEl.step = mode === "percent" ? "1" : "0.5";
+
+}
+
+document.querySelectorAll('input[name="marginMode"]').forEach(radio => {
+
+    radio.addEventListener("change", () => updateMarginUnitLabel(radio.value));
+
+});
+
+
+//------------------------------------------------------------
+// Request fullscreen. If installed as a PWA, manifest.json's
+// "display": "fullscreen" already handles this with no browser chrome
+// to hide in the first place. This is the fallback for a plain browser
+// tab — fullscreen requires a user gesture in most browsers, so it
+// can't just fire on page load; it fires on the first touch instead.
+//------------------------------------------------------------
+
+function requestFullscreen() {
+
+    if (document.fullscreenElement)
+        return;
+
+    const el = document.documentElement;
+    const request = el.requestFullscreen || el.webkitRequestFullscreen;
+
+    if (request)
+        request.call(el).catch?.(() => {});
+
+}
+
+document.body.addEventListener("pointerdown", requestFullscreen, { once: true });

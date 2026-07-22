@@ -97,9 +97,14 @@
 
                 <p class="hint">Added on top of the wholesale price shown. Leave at 0 to show wholesale only.</p>
 
+                <div class="row margin-mode">
+                    <label><input type="radio" name="marginMode" value="flat" checked> Flat (c/kWh)</label>
+                    <label><input type="radio" name="marginMode" value="percent"> Percentage (%)</label>
+                </div>
+
                 <div class="row">
                     <input id="marginInput" type="number" step="0.5" inputmode="decimal">
-                    <span class="unit">c/kWh</span>
+                    <span class="unit" id="marginUnit">c/kWh</span>
                     <button id="applyMargin" type="button">Apply</button>
                 </div>
 

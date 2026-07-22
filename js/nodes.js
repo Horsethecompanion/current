@@ -38,7 +38,8 @@ const KNOWN_NODES = [
 
 const SETTINGS_KEYS = {
     node: "current_node_code",
-    margin: "current_retail_margin"
+    marginValue: "current_retail_margin_value",
+    marginMode: "current_retail_margin_mode" // "flat" (c/kWh) or "percent"
 };
 
 function getSelectedNode() {
@@ -53,17 +54,36 @@ function setSelectedNode(code) {
 
 }
 
-function getRetailMargin() {
+function getMarginSettings() {
 
-    const stored = localStorage.getItem(SETTINGS_KEYS.margin);
+    const storedValue = localStorage.getItem(SETTINGS_KEYS.marginValue);
+    const storedMode = localStorage.getItem(SETTINGS_KEYS.marginMode);
 
-    return stored !== null ? Number(stored) : CONFIG.retailMargin;
+    return {
+        value: storedValue !== null ? Number(storedValue) : CONFIG.retailMargin,
+        mode: storedMode === "percent" ? "percent" : "flat"
+    };
 
 }
 
-function setRetailMargin(value) {
+function setMarginSettings(value, mode) {
 
-    localStorage.setItem(SETTINGS_KEYS.margin, String(value));
+    localStorage.setItem(SETTINGS_KEYS.marginValue, String(value));
+    localStorage.setItem(SETTINGS_KEYS.marginMode, mode === "percent" ? "percent" : "flat");
+
+}
+
+// Applies the retail margin to a single wholesale price. Flat mode adds
+// c/kWh; percentage mode scales the price (e.g. 20% adds a fifth on
+// top). Kept as a pure function so it's easy to apply consistently
+// wherever a price needs to become "what I'd actually pay".
+
+function applyMargin(wholesalePrice, settings) {
+
+    if (settings.mode === "percent")
+        return Number((wholesalePrice * (1 + settings.value / 100)).toFixed(2));
+
+    return Number((wholesalePrice + settings.value).toFixed(2));
 
 }
 
