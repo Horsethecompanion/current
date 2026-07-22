@@ -57,7 +57,62 @@
 
     </div>
 
+    <div id="settingsOverlay" class="hidden">
+
+        <div id="settingsCard">
+
+            <h2>Settings</h2>
+
+            <section>
+
+                <h3>Location</h3>
+
+                <div id="knownNodes"></div>
+
+                <button id="useMyLocation" type="button">Use my location</button>
+
+                <p class="hint">
+                    Codes above are matched against WITS's own official
+                    node list, covering major population centres. Don't
+                    see yours, or it doesn't seem to be updating? Enter
+                    a GXP code directly:
+                </p>
+
+                <div class="row">
+                    <input id="customNode" type="text" placeholder="e.g. ALB0331" maxlength="10">
+                    <button id="applyCustomNode" type="button">Use this code</button>
+                </div>
+
+                <p class="hint">
+                    Look yours up on the
+                    <a href="https://emi.ea.govt.nz/Wholesale/Datasets/MappingsAndGeospatial"
+                       target="_blank" rel="noopener">Electricity Authority's GXP dataset</a>.
+                </p>
+
+            </section>
+
+            <section>
+
+                <h3>Retail margin</h3>
+
+                <p class="hint">Added on top of the wholesale price shown. Leave at 0 to show wholesale only.</p>
+
+                <div class="row">
+                    <input id="marginInput" type="number" step="0.5" inputmode="decimal">
+                    <span class="unit">c/kWh</span>
+                    <button id="applyMargin" type="button">Apply</button>
+                </div>
+
+            </section>
+
+            <button id="closeSettings" type="button" class="close">Close</button>
+
+        </div>
+
+    </div>
+
     <script src="js/config.js"></script>
+    <script src="js/nodes.js"></script>
     <script src="js/mockdata.js"></script>
     <script src="js/livedata.js"></script>
     <script src="js/renderer.js"></script>

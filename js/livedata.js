@@ -20,7 +20,7 @@ class LiveDataSource {
         try {
 
             const url =
-                `${CONFIG.workerUrl}/prices?node=${CONFIG.gxpNode}`;
+                `${CONFIG.workerUrl}/prices?node=${getSelectedNode()}`;
 
             const res = await fetch(url, {
                 cache: "no-store"
@@ -34,9 +34,13 @@ class LiveDataSource {
             if (!Array.isArray(json.prices) || json.prices.length === 0)
                 throw new Error("Empty price dataset");
 
+            // Wholesale prices only — retail margin is applied as a
+            // display-layer transform in app.js, not baked in here, so
+            // changing the margin doesn't require a re-fetch.
+
             this.data = json.prices.map(p => ({
                 time: new Date(p.time),
-                price: this.applyMargin(p.price)
+                price: p.price
             }));
 
             this.lastFetchOk = true;
@@ -62,14 +66,6 @@ class LiveDataSource {
             }
 
         }
-
-    }
-
-    applyMargin(wholesalePrice) {
-
-        return Number(
-            (wholesalePrice + CONFIG.retailMargin).toFixed(2)
-        );
 
     }
 

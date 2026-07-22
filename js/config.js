@@ -61,9 +61,9 @@ const CONFIG = {
     // Data source
     // Flip to false once the worker is deployed and workerUrl is set below.
 
-    useMockData: false,
+    useMockData: true,
 
-    workerUrl: "https://current-prices.current-prices.workers.dev",
+    workerUrl: "https://current-prices.YOUR-SUBDOMAIN.workers.dev",
 
     gxpNode: "ALB0331", // Albany GXP — North Shore
 

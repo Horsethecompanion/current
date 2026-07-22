@@ -308,3 +308,170 @@ body.night #status{
     }
 
 }
+/* ---------- Settings overlay ---------- */
+
+#settingsOverlay{
+
+    position:fixed;
+    inset:0;
+
+    z-index:10;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    padding:24px;
+
+    background:rgba(0,0,0,.6);
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
+
+    font-family:var(--font);
+    color:var(--text);
+}
+
+#settingsOverlay.hidden{
+
+    display:none;
+}
+
+#settingsCard{
+
+    width:min(480px,100%);
+    max-height:85vh;
+
+    overflow-y:auto;
+
+    background:#181818;
+    border:1px solid var(--line);
+    border-radius:16px;
+
+    padding:28px;
+}
+
+#settingsCard h2{
+
+    font-size:22px;
+    font-weight:700;
+    margin-bottom:20px;
+}
+
+#settingsCard section{
+
+    margin-bottom:24px;
+}
+
+#settingsCard h3{
+
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:10px;
+}
+
+#settingsCard .hint{
+
+    font-size:13px;
+    line-height:1.5;
+    color:var(--muted);
+    margin:10px 0;
+}
+
+#settingsCard .hint a{
+
+    color:var(--text);
+}
+
+#knownNodes{
+
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-bottom:12px;
+}
+
+.node-option{
+
+    display:block;
+    width:100%;
+
+    text-align:left;
+
+    padding:12px 14px;
+
+    background:#222;
+    border:1px solid var(--line);
+    border-radius:10px;
+
+    color:var(--text);
+    font:inherit;
+    font-size:15px;
+
+    cursor:pointer;
+}
+
+.node-option.selected{
+
+    background:#2f9f4b;
+    border-color:#2f9f4b;
+}
+
+#settingsCard .row{
+
+    display:flex;
+    gap:8px;
+    align-items:center;
+}
+
+#settingsCard input[type="text"],
+#settingsCard input[type="number"]{
+
+    flex:1;
+
+    padding:10px 12px;
+
+    background:#222;
+    border:1px solid var(--line);
+    border-radius:8px;
+
+    color:var(--text);
+    font:inherit;
+    font-size:15px;
+}
+
+#settingsCard .unit{
+
+    color:var(--muted);
+    font-size:14px;
+}
+
+#settingsCard button{
+
+    padding:10px 16px;
+
+    background:#333;
+    border:1px solid var(--line);
+    border-radius:8px;
+
+    color:var(--text);
+    font:inherit;
+    font-size:14px;
+
+    cursor:pointer;
+}
+
+#useMyLocation{
+
+    width:100%;
+}
+
+#settingsCard button.close{
+
+    width:100%;
+    margin-top:8px;
+
+    background:transparent;
+}

@@ -17,6 +17,11 @@ dashboard.
   left, forecast to the right.
 - Tap anywhere to zoom the timeline between ±4h and ±24h, with a smooth
   animated transition.
+- Long-press anywhere to open **Settings** — pick a location from a
+  built-in list, use your device's location to jump to the nearest one,
+  enter any GXP code directly, and set a retail margin (c/kWh) added on
+  top of the wholesale price. Both persist locally in the browser.
+- Two-finger tap cycles night mode (auto → on → off → auto).
 - A small status dot: green means the last live price fetch succeeded;
   amber means it failed and you're looking at the last data that did
   work (the display never just goes blank).
@@ -86,9 +91,10 @@ To connect real data:
 
 Everything tunable lives in `js/config.js`:
 
-- `gxpNode` — which GXP to show prices for.
-- `retailMargin` — flat c/kWh added on top of wholesale (defaults to 0;
-  useful once you know your retailer's actual margin/fees structure).
+- `gxpNode` — default GXP, used until someone picks a different one in
+  Settings (which persists in `localStorage`, so it survives reloads).
+- `retailMargin` — default flat c/kWh added on top of wholesale, also
+  overridable per-device from Settings.
 - `historyHours` / `forecastHours` — how far back/forward the timeline
   shows by default.
 - `colourStops` / `priceScale` — the colour ramp. Prices are mapped
@@ -99,15 +105,27 @@ Everything tunable lives in `js/config.js`:
   clamping to the same dark red.
 - `dataRefreshSeconds` — how often the app polls the Worker.
 
+### Node list
+
+`js/nodes.js` has a curated list of GXPs for major NZ population centres,
+matched against WITS's own official node reference list — so the
+code-to-place mapping is authoritative, not a guess. Only Albany has
+actually been fetch-tested end-to-end against live price data; the rest
+are almost certainly fine (they're all major, actively-traded GXPs), but
+if one comes back empty, it fails safely — amber status dot, last good
+data retained, never a silently-wrong number. The in-app "Custom GXP
+code" field works for anywhere not on the list, no code change needed.
+
 ## Known limitations / ideas for later
 
-- Single hardcoded GXP node — a location picker (with browser geolocation
-  to suggest the nearest node) would be a natural next step if this ever
-  goes properly multi-user.
-- No retail margin UI yet — the config field exists, but there's no
-  in-app way to set it.
+- No in-app way to *find* your GXP code if you're not near one of the
+  listed cities, beyond the Electricity Authority's own dataset link
+  shown in Settings.
 - Long-press "show the actual line graph over the heatmap" overlay was
   discussed but not built.
+- If this app is used as-is (not forked with your own Worker), price
+  requests go through the original deployer's Cloudflare account and
+  WITS subscription — fine at hobby scale, but worth knowing.
 
 ## License
 
