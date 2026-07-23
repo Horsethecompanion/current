@@ -165,10 +165,41 @@ document.body.addEventListener("touchstart", (e) => {
             STATE.nightModeOverride = null;
 
         applyNightMode();
+        showNightModeToast();
 
     }, 100);
 
 }, { passive:false });
+
+function showNightModeToast() {
+
+    const label =
+        STATE.nightModeOverride === true ? "Night mode: On" :
+        STATE.nightModeOverride === false ? "Night mode: Off" :
+        "Night mode: Auto";
+
+    let toast = document.getElementById("nightToast");
+
+    if (!toast) {
+
+        toast = document.createElement("div");
+        toast.id = "nightToast";
+        document.body.appendChild(toast);
+
+    }
+
+    toast.textContent = label;
+    toast.classList.add("visible");
+
+    clearTimeout(showNightModeToast._timer);
+
+    showNightModeToast._timer = setTimeout(() => {
+
+        toast.classList.remove("visible");
+
+    }, 1600);
+
+}
 
 
 //------------------------------------------------------------
@@ -232,16 +263,32 @@ const marginUnitEl = document.getElementById("marginUnit");
 
 let pressTimer = null;
 let suppressNextClick = false;
+let pressStart = null;
+let activePointerCount = 0;
 
 const LONG_PRESS_MS = 600;
 const MOVE_CANCEL_PX = 12;
-
-let pressStart = null;
 
 document.body.addEventListener("pointerdown", (e) => {
 
     if (e.target.closest("#settingsOverlay"))
         return;
+
+    activePointerCount++;
+
+    if (activePointerCount > 1) {
+
+        // A second finger just landed — this is a two-finger gesture
+        // (night mode), not a long-press candidate. Cancel any pending
+        // timer so a first-finger timer can't fire later mid-gesture.
+
+        clearTimeout(pressTimer);
+        pressTimer = null;
+        pressStart = null;
+
+        return;
+
+    }
 
     pressStart = { x: e.clientX, y: e.clientY };
 
@@ -262,8 +309,12 @@ document.body.addEventListener("pointermove", (e) => {
     const dx = e.clientX - pressStart.x;
     const dy = e.clientY - pressStart.y;
 
-    if (Math.hypot(dx, dy) > MOVE_CANCEL_PX)
+    if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) {
+
         clearTimeout(pressTimer);
+        pressTimer = null;
+
+    }
 
 });
 
@@ -271,7 +322,10 @@ document.body.addEventListener("pointermove", (e) => {
 
     document.body.addEventListener(evt, () => {
 
+        activePointerCount = Math.max(0, activePointerCount - 1);
+
         clearTimeout(pressTimer);
+        pressTimer = null;
         pressStart = null;
 
     })
@@ -436,12 +490,16 @@ function requestFullscreen() {
     if (document.fullscreenElement)
         return;
 
-    const el = document.documentElement;
+    const el = document.body;
     const request = el.requestFullscreen || el.webkitRequestFullscreen;
 
     if (request)
-        request.call(el).catch?.(() => {});
+        request.call(el)?.catch?.(() => {});
 
 }
 
-document.body.addEventListener("pointerdown", requestFullscreen, { once: true });
+// click, not pointerdown/touchstart — a click only fires once the
+// browser has confirmed the gesture is a tap (not the start of a
+// scroll), which Android Chrome is far more willing to honour a
+// fullscreen request from.
+document.body.addEventListener("click", requestFullscreen, { once: true });

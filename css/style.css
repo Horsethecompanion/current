@@ -51,6 +51,8 @@ canvas{
     display:block;
 
     z-index:0;
+
+    transition:filter .5s;
 }
 
 #overlay{
@@ -278,6 +280,21 @@ body.night{
     background:#050505;
 }
 
+body.night #heatmap{
+
+    filter:brightness(.32) saturate(.6);
+}
+
+body.night #priceBackdrop{
+
+    background:
+        radial-gradient(
+            closest-side,
+            rgba(0,0,0,.65),
+            rgba(0,0,0,0) 75%
+        );
+}
+
 body.night #status{
 
     box-shadow:none;
@@ -492,4 +509,37 @@ body.night #status{
     color:var(--text);
 
     cursor:pointer;
+}
+
+#nightToast{
+
+    position:fixed;
+
+    left:50%;
+    top:14%;
+
+    transform:translate(-50%,-8px);
+
+    padding:10px 20px;
+
+    background:rgba(0,0,0,.7);
+    border-radius:999px;
+
+    color:#fff;
+    font-family:var(--font);
+    font-size:15px;
+    font-weight:600;
+
+    opacity:0;
+    pointer-events:none;
+
+    transition:opacity .25s, transform .25s;
+
+    z-index:20;
+}
+
+#nightToast.visible{
+
+    opacity:1;
+    transform:translate(-50%,0);
 }
