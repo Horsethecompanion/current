@@ -4,7 +4,7 @@
 // edge cache, and this service worker just leaves cross-origin requests
 // (the worker, the WITS API) alone entirely.
 
-const CACHE_NAME = "current-shell-v2";
+const CACHE_NAME = "current-shell-v3";
 
 const SHELL_FILES = [
     "./",
@@ -17,7 +17,10 @@ const SHELL_FILES = [
     "./js/app.js",
     "./manifest.json",
     "./assets/icon-192.png",
-    "./assets/icon-512.png"
+    "./assets/icon-512.png",
+    "./assets/icon-192-maskable.png",
+    "./assets/icon-512-maskable.png",
+    "./assets/apple-touch-icon.png"
 ];
 
 self.addEventListener("install", (event) => {
