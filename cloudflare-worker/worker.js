@@ -17,8 +17,13 @@
  *   on this gateway; it 404s. This REST endpoint is confirmed live via
  *   the portal's own "Try it out" console.)
  * - Query params: schedules (array, required), marketType (required),
- *   nodes (array, optional), back/forward (trading-period offsets from
- *   now, optional, max ~50 each).
+ *   nodes (array, optional). back/forward (trading-period offsets from
+ *   now) must be sent TOGETHER as a pair if either is used — sending
+ *   only one triggers a 400 ("back/forward value must be the integer
+ *   value in the range of 1-72"). Since RTD (backward-looking only) and
+ *   PRSL (forward-looking only) each only need one direction, the
+ *   other direction is always still sent, set to the minimum valid
+ *   value of 1 — see buildScheduleUrl() below.
  * - Response shape: { schedules: [ { schedule, prices: [ { schedule,
  *   tradingDateTime, tradingPeriod, runType, node, price, ... } ] } ] }
  * - tradingDateTime arrives with an explicit offset, e.g.
@@ -90,11 +95,7 @@ export default {
 
             const token = await getAccessToken(env);
 
-            const raw = await fetchPrices(
-                [ACTUAL_SCHEDULE, FORECAST_SCHEDULE],
-                node,
-                token
-            );
+            const raw = await fetchPrices(node, token);
 
             const prices = toTimeSeries(raw, node);
 
@@ -157,22 +158,64 @@ async function getAccessToken(env) {
 
 }
 
-async function fetchPrices(schedules, node, token) {
+// RTD (actual dispatch) is inherently backward-looking only — there's no
+// such thing as a future actual price. PRSL (forecast) is the mirror
+// image, so each is queried with only the direction that applies to it
+// (see buildScheduleUrl below for why both back AND forward still get
+// sent regardless — the API requires them as a pair).
+
+async function fetchPrices(node, token) {
+
+    const [actualItems, forecastItems] = await Promise.all([
+
+        fetchSchedule(ACTUAL_SCHEDULE, node, token, {
+            back: HISTORY_PERIODS,
+            forward: 0
+        }),
+
+        fetchSchedule(FORECAST_SCHEDULE, node, token, {
+            back: 0,
+            forward: FORECAST_PERIODS
+        })
+
+    ]);
+
+    return [...actualItems, ...forecastItems];
+
+}
+
+function buildScheduleUrl(schedule, node, { back, forward }) {
 
     const params = new URLSearchParams();
 
-    schedules.forEach(s => params.append("schedules", s));
+    params.append("schedules", schedule);
     params.append("marketType", MARKET_TYPE);
     params.append("nodes", node);
-    params.append("back", String(HISTORY_PERIODS));
-    params.append("forward", String(FORECAST_PERIODS));
 
-    const res = await fetch(`${PRICES_URL}?${params.toString()}`, {
+    // Confirmed via a live 400 response: back/forward must be supplied
+    // together as a pair, each an integer 1-72 — you can't send one
+    // without the other, and 0 is out of range. So both are always sent;
+    // whichever direction doesn't apply to a given schedule (e.g.
+    // "forward" for RTD, which has no future data by nature) just gets
+    // the minimum valid value of 1, which costs nothing since there's
+    // nothing to return in that direction anyway.
+    params.append("back", String(Math.max(1, back)));
+    params.append("forward", String(Math.max(1, forward)));
+
+    return `${PRICES_URL}?${params.toString()}`;
+
+}
+
+async function fetchSchedule(schedule, node, token, { back, forward }) {
+
+    const url = buildScheduleUrl(schedule, node, { back, forward });
+
+    const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
     });
 
     if (!res.ok) {
-        throw new Error(`Prices request failed: ${res.status} ${await res.text()}`);
+        throw new Error(`Prices request failed for ${schedule}: ${res.status} ${await res.text()}`);
     }
 
     const body = await res.json();
