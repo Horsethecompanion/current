@@ -125,30 +125,24 @@ class MockDataSource {
 
     getCurrentIndex() {
 
-        const now = new Date();
+        // Same fix as LiveDataSource: prefer the latest point at or
+        // before now, not whichever point is nearest in either
+        // direction — keeps mock and live behaviour consistent.
 
-        let nearest = 0;
+        const now = Date.now();
 
-        let distance = Infinity;
+        let lastPastIndex = -1;
 
-        this.data.forEach((d, i) => {
+        for (let i = 0; i < this.data.length; i++) {
 
-            const diff =
-                Math.abs(
-                    d.time.getTime() -
-                    now.getTime()
-                );
+            if (this.data[i].time.getTime() <= now)
+                lastPastIndex = i;
+            else
+                break;
 
-            if (diff < distance) {
+        }
 
-                distance = diff;
-                nearest = i;
-
-            }
-
-        });
-
-        return nearest;
+        return lastPastIndex >= 0 ? lastPastIndex : 0;
 
     }
 

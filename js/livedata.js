@@ -77,25 +77,31 @@ class LiveDataSource {
 
     getCurrentIndex() {
 
-        const now = new Date();
+        // "Current" should mean the latest known reading, not whichever
+        // point happens to be closest in time — a forecast for an
+        // upcoming period can sit chronologically nearer to "now" than
+        // the most recent actual dispatch price (actuals lag a few
+        // minutes behind real time), and picking it would show a
+        // speculative forecast as if it were live. So: walk forward and
+        // keep the last point at or before now; data is sorted
+        // ascending, so the first point we hit in the future ends it.
 
-        let nearest = 0;
-        let distance = Infinity;
+        const now = Date.now();
 
-        this.data.forEach((d, i) => {
+        let lastPastIndex = -1;
 
-            const diff = Math.abs(d.time.getTime() - now.getTime());
+        for (let i = 0; i < this.data.length; i++) {
 
-            if (diff < distance) {
+            if (this.data[i].time.getTime() <= now)
+                lastPastIndex = i;
+            else
+                break;
 
-                distance = diff;
-                nearest = i;
+        }
 
-            }
-
-        });
-
-        return nearest;
+        // Only happens if every point is somehow in the future — fall
+        // back to the earliest available rather than returning nothing.
+        return lastPastIndex >= 0 ? lastPastIndex : 0;
 
     }
 

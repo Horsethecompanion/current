@@ -1,151 +1,88 @@
-const CONFIG = {
+// Caches the app shell only — HTML/CSS/JS/icons — so the display keeps
+// running through a wifi blip. Price data is deliberately never cached
+// here: it's already handled by the Cloudflare Worker's own short-lived
+// edge cache, and this service worker just leaves cross-origin requests
+// (the worker, the WITS API) alone entirely.
 
-    // Timeline
+const CACHE_NAME = "current-shell-v3";
 
-    defaultTimelineHours: 4,
+const SHELL_FILES = [
+    "./",
+    "./index.html",
+    "./css/style.css",
+    "./js/config.js",
+    "./js/mockdata.js",
+    "./js/livedata.js",
+    "./js/renderer.js",
+    "./js/app.js",
+    "./manifest.json",
+    "./assets/icon-192.png",
+    "./assets/icon-512.png",
+    "./assets/icon-192-maskable.png",
+    "./assets/icon-512-maskable.png",
+    "./assets/apple-touch-icon.png"
+];
 
-    zoomedTimelineHours: 24,
+self.addEventListener("install", (event) => {
 
-    zoomLerpSpeed: 4,
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(SHELL_FILES))
+            .then(() => self.skipWaiting())
+    );
 
+});
 
+self.addEventListener("activate", (event) => {
 
-    // Refresh
+    event.waitUntil(
+        caches.keys().then(names =>
+            Promise.all(
+                names
+                    .filter(name => name !== CACHE_NAME)
+                    .map(name => caches.delete(name))
+            )
+        ).then(() => self.clients.claim())
+    );
 
-    refreshIntervalSeconds: 60,
+});
 
+self.addEventListener("fetch", (event) => {
 
+    const url = new URL(event.request.url);
 
-    // Night mode
+    // Only handle same-origin GET requests for the shell. Everything
+    // else (live price fetches to the worker, any future cross-origin
+    // calls) passes straight through to the network untouched.
 
-    autoNightMode: true,
+    if (event.request.method !== "GET" || url.origin !== self.location.origin)
+        return;
 
-    nightStartHour: 22,
+    // Network-first: always prefer a fresh copy when there's a
+    // connection, so code changes show up on the very next reload
+    // rather than waiting on a manual cache clear. The cache only
+    // kicks in if the network request genuinely fails (offline, wifi
+    // blip) — that's the one thing it's actually there for.
 
-    nightEndHour: 6,
+    event.respondWith(
 
+        fetch(event.request)
+            .then(response => {
 
+                if (response.ok) {
 
-    // Animation
+                    const copy = response.clone();
 
-    animationFPS: 60,
+                    caches.open(CACHE_NAME)
+                        .then(cache => cache.put(event.request, copy));
 
-    transitionDuration: 600,
+                }
 
+                return response;
 
+            })
+            .catch(() => caches.match(event.request))
 
-    // Time division marks
+    );
 
-    timeMarks: {
-
-        minorHeight: 8,
-        majorHeight: 14,
-
-        minorColour: "rgba(255,255,255,.22)",
-        majorColour: "rgba(255,255,255,.45)",
-
-        majorEveryHours: 6
-
-    },
-
-
-
-    // Price display
-
-    units: "c/kWh",
-
-    decimals: 1,
-
-
-
-    // Data source
-    // Flip to false once the worker is deployed and workerUrl is set below.
-
-    useMockData: false,
-
-    workerUrl: "https://current-prices.current-prices.workers.dev",
-
-    gxpNode: "ALB0331", // Albany GXP — North Shore
-
-    retailMargin: 0, // c/kWh, added on top of wholesale. Leave 0 for now.
-
-    dataRefreshSeconds: 60, // how often to poll the worker (worker itself caches upstream ~60s)
-
-
-    // Mock / synthetic timeline shape (also used to size the live dataset)
-
-    historyHours: 24,
-
-    forecastHours: 24,
-
-    intervalMinutes: 30,
-
-
-
-    // Colour scale (c/kWh)
-    //
-    // NZ wholesale prices normally sit in the 5-25 c/kWh range but can
-    // spike into the hundreds or low thousands during scarcity events.
-    // A plain linear scale either wastes resolution on the rare extreme
-    // end, or saturates to the same dark red for "a bit pricey" and
-    // "genuinely extreme" alike. Instead, priceScale below warps price
-    // through a piecewise linear→log curve before it's mapped onto the
-    // stops: the normal daily range gets most of the visual travel,
-    // and the log tail still keeps real spikes visually distinct from
-    // each other rather than clamping to one colour.
-
-    priceScale: {
-
-        linearMax: 25,      // c/kWh — top of the "normal" daily range
-        spikeMax: 1000,     // c/kWh — anything at/above this maxes out
-        linearFraction: 0.7 // portion of the visual scale given to 0..linearMax
-
-    },
-
-    colourStops: [
-
-        { value: 0,    colour: "#156b37" },
-
-        { value: 5,    colour: "#2f9f4b" },
-
-        { value: 10,   colour: "#89c541" },
-
-        { value: 15,   colour: "#d6c73a" },
-
-        { value: 20,   colour: "#d9b530" },
-
-        { value: 30,   colour: "#d77b2a" },
-
-        { value: 45,   colour: "#cf4c2e" },
-
-        { value: 80,   colour: "#7d1f1f" },
-
-        { value: 250,  colour: "#5c1420" },
-
-        { value: 1000, colour: "#200308" }
-
-    ]
-
-};
-
-
-
-const STATE = {
-
-    timelineHours: CONFIG.defaultTimelineHours,
-
-    displayedTimelineHours: CONFIG.defaultTimelineHours,
-
-    nightModeOverride: null,
-
-    lastUpdate: null,
-
-    connected: true,
-
-    currentPrice: 0,
-
-    currentIndex: 0,
-
-    dataset: []
-
-};
+});
