@@ -1,137 +1,123 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
+// GXP codes below are matched against WITS's own official POC reference
+// list (the dropdown WITS itself uses), not guessed from naming
+// conventions — so the code-to-place mapping is authoritative. One
+// caveat: only Albany has actually been fetch-tested against the live
+// /prices endpoint end-to-end. The others are almost certainly fine
+// (these are all major, actively-traded GXPs), but if one comes back
+// empty, that fails safely — the app just shows the amber "stale" dot
+// and holds the last good data, it won't show silently-wrong numbers.
+// If you hit one that doesn't work, the "Custom GXP code" field below
+// still works as a fallback while it gets sorted out.
 
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+const KNOWN_NODES = [
 
-    <title>Current</title>
+    { name: "Albany (North Shore, Auckland)",   code: "ALB0331", lat: -36.7280, lon: 174.7000 },
+    { name: "Penrose (Central Auckland)",       code: "PEN0331", lat: -36.9010, lon: 174.8150 },
+    { name: "Hamilton",                         code: "HAM0331", lat: -37.7870, lon: 175.2793 },
+    { name: "Tauranga",                         code: "TGA0331", lat: -37.6878, lon: 176.1651 },
+    { name: "Rotorua",                          code: "ROT0331", lat: -38.1368, lon: 176.2497 },
+    { name: "Napier / Hastings (Redclyffe)",    code: "RDF0331", lat: -39.4928, lon: 176.8973 },
+    { name: "New Plymouth",                     code: "NPL0331", lat: -39.0556, lon: 174.0752 },
+    { name: "Palmerston North (Bunnythorpe)",   code: "BPE0331", lat: -40.3523, lon: 175.6110 },
+    { name: "Wellington (Haywards)",            code: "HAY0331", lat: -41.2044, lon: 174.9346 },
+    { name: "Nelson (Stoke)",                   code: "STK0331", lat: -41.3159, lon: 173.2740 },
+    { name: "Blenheim",                         code: "BLN0331", lat: -41.5134, lon: 173.9612 },
+    { name: "Christchurch (Islington)",         code: "ISL0331", lat: -43.5320, lon: 172.6306 },
+    { name: "Dunedin (Halfway Bush)",           code: "HWB0331", lat: -45.8788, lon: 170.4630 },
+    { name: "Queenstown (Frankton)",            code: "FKN0331", lat: -45.0312, lon: 168.7420 },
+    { name: "Invercargill",                     code: "INV0331", lat: -46.4132, lon: 168.3538 }
 
-    <meta name="theme-color" content="#111111">
+];
 
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="assets/icon-192.png">
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
+//------------------------------------------------------------
+// Settings persistence — localStorage-backed, with CONFIG defaults as
+// the fallback. Kept in one place so livedata.js and app.js both read
+// the same resolved values without needing to know about localStorage.
+//------------------------------------------------------------
 
-    <link rel="stylesheet" href="css/style.css">
+const SETTINGS_KEYS = {
+    node: "current_node_code",
+    marginValue: "current_retail_margin_value",
+    marginMode: "current_retail_margin_mode" // "flat" (c/kWh) or "percent"
+};
 
-</head>
+function getSelectedNode() {
 
-<body>
+    return localStorage.getItem(SETTINGS_KEYS.node) || CONFIG.gxpNode;
 
-    <canvas id="heatmap"></canvas>
+}
 
-    <div id="overlay">
+function setSelectedNode(code) {
 
-        <div id="topBar">
+    localStorage.setItem(SETTINGS_KEYS.node, code.trim().toUpperCase());
 
-            <span id="hoursLeft">−4h</span>
+}
 
-            <span id="nowMarker">Now</span>
+function getMarginSettings() {
 
-            <span id="hoursRight">+4h</span>
+    const storedValue = localStorage.getItem(SETTINGS_KEYS.marginValue);
+    const storedMode = localStorage.getItem(SETTINGS_KEYS.marginMode);
 
-        </div>
+    return {
+        value: storedValue !== null ? Number(storedValue) : CONFIG.retailMargin,
+        mode: storedMode === "percent" ? "percent" : "flat"
+    };
 
-        <div id="priceContainer">
+}
 
-            <div id="priceBackdrop"></div>
+function setMarginSettings(value, mode) {
 
-            <div id="price">--</div>
+    localStorage.setItem(SETTINGS_KEYS.marginValue, String(value));
+    localStorage.setItem(SETTINGS_KEYS.marginMode, mode === "percent" ? "percent" : "flat");
 
-            <div id="units">c/kWh</div>
+}
 
-        </div>
+// Applies the retail margin to a single wholesale price. Flat mode adds
+// c/kWh; percentage mode scales the price (e.g. 20% adds a fifth on
+// top). Kept as a pure function so it's easy to apply consistently
+// wherever a price needs to become "what I'd actually pay".
 
-        <div id="bottomBar">
+function applyMargin(wholesalePrice, settings) {
 
-            <span id="updated">--:--</span>
+    if (settings.mode === "percent")
+        return Number((wholesalePrice * (1 + settings.value / 100)).toFixed(2));
 
-            <span id="status"></span>
+    return Number((wholesalePrice + settings.value).toFixed(2));
 
-        </div>
+}
 
-    </div>
+// Straight-line (haversine) distance in km — plenty accurate for
+// "which of a short list of nodes is closest", not for navigation.
 
-    <div id="settingsOverlay" class="hidden">
+function nearestNode(lat, lon) {
 
-        <div id="settingsCard">
+    const toRad = deg => deg * Math.PI / 180;
 
-            <h2>Settings</h2>
+    let best = null;
+    let bestDistance = Infinity;
 
-            <section>
+    KNOWN_NODES.forEach(node => {
 
-                <h3>Location</h3>
+        const dLat = toRad(node.lat - lat);
+        const dLon = toRad(node.lon - lon);
 
-                <div id="knownNodes"></div>
+        const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat)) * Math.cos(toRad(node.lat)) *
+            Math.sin(dLon / 2) ** 2;
 
-                <button id="useMyLocation" type="button">Use my location</button>
+        const distance = 2 * Math.asin(Math.sqrt(a)) * 6371;
 
-                <p class="hint">
-                    Codes above are matched against WITS's own official
-                    node list, covering major population centres. Don't
-                    see yours, or it doesn't seem to be updating? Enter
-                    a GXP code directly:
-                </p>
+        if (distance < bestDistance) {
 
-                <div class="row">
-                    <input id="customNode" type="text" placeholder="e.g. ALB0331" maxlength="10">
-                    <button id="applyCustomNode" type="button">Use this code</button>
-                </div>
+            bestDistance = distance;
+            best = node;
 
-                <p class="hint">
-                    Look yours up on the
-                    <a href="https://emi.ea.govt.nz/Wholesale/Datasets/MappingsAndGeospatial"
-                       target="_blank" rel="noopener">Electricity Authority's GXP dataset</a>.
-                </p>
-
-            </section>
-
-            <section>
-
-                <h3>Retail margin</h3>
-
-                <p class="hint">Added on top of the wholesale price shown. Leave at 0 to show wholesale only.</p>
-
-                <div class="row margin-mode">
-                    <label><input type="radio" name="marginMode" value="flat" checked> Flat (c/kWh)</label>
-                    <label><input type="radio" name="marginMode" value="percent"> Percentage (%)</label>
-                </div>
-
-                <div class="row">
-                    <input id="marginInput" type="number" step="0.5" inputmode="decimal">
-                    <span class="unit" id="marginUnit">c/kWh</span>
-                    <button id="applyMargin" type="button">Apply</button>
-                </div>
-
-            </section>
-
-            <button id="closeSettings" type="button" class="close">Close</button>
-
-        </div>
-
-    </div>
-
-    <script src="js/config.js"></script>
-    <script src="js/nodes.js"></script>
-    <script src="js/mockdata.js"></script>
-    <script src="js/livedata.js"></script>
-    <script src="js/renderer.js"></script>
-    <script src="js/app.js"></script>
-
-    <script>
-        if ("serviceWorker" in navigator) {
-            window.addEventListener("load", () => {
-                navigator.serviceWorker.register("sw.js").catch(err =>
-                    console.warn("Service worker registration failed:", err)
-                );
-            });
         }
-    </script>
 
-</body>
-</html>
+    });
+
+    return best;
+
+}
